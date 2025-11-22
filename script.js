@@ -1,32 +1,23 @@
-/* ==========================================
-   ECHO CHAMBER - SCRIPT CORREGIDO PARA ANDROID
-   Soluciona: 
-   1. Falta de audio en respuesta (Garbage Collection)
-   2. Detección intermitente (Umbral de ruido)
-   ========================================== */
-
 let recognition;
 let isListening = false;
 let detectedGender = 'neutral';
 let wordCount = 0;
-let currentUtterance = null; // VARIABLE GLOBAL PARA QUE ANDROID NO LA BORRE
+let currentUtterance = null;
+let lastGender = 'female'; // Para alternar en móvil si es necesario
 
-// Variables audio
+// Variables audio (Solo PC)
 let audioContext;
 let analyser;
 let microphoneStream;
 let audioAnalysisInterval;
 
-// Umbral de frecuencia (Hz)
 const GENDER_THRESHOLD_HZ = 165; 
-
-// Detectar si es móvil
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 function createStars() {
     const background = document.querySelector('.lab-background');
     background.innerHTML = '<div class="lab-floor"></div>';
-    const starCount = isMobile ? 20 : 50; 
+    const starCount = isMobile ? 15 : 50; 
     for (let i = 0; i < starCount; i++) {
         const star = document.createElement('div');
         star.className = 'stars';
@@ -40,21 +31,23 @@ function createStars() {
 function startGame() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        alert("⚠️ Error: Navegador no compatible. Usa Google Chrome.");
+        alert("⚠️ Error: Tu navegador no soporta reconocimiento de voz. Usa Chrome.");
         return;
     }
     
-    // Truco: Desbloquear el audio del celular inmediatamente
+    // Desbloquear audio inmediatamente
     unlockAudio();
 
     document.getElementById('startScreen').classList.remove('active');
     document.getElementById('gameScreen').classList.add('active');
     createStars();
+    
     setupSpeechRecognition();
-    showStatus('Listo. Presiona el botón "Hablar"');
+    
+    const msg = isMobile ? 'Modo Móvil Activado. Presiona "Hablar"' : 'Listo. Presiona "Hablar"';
+    showStatus(msg);
 }
 
-// TRUCO IMPORTANTE PARA ANDROID: Reproducir silencio para "despertar" al sintetizador
 function unlockAudio() {
     if ('speechSynthesis' in window) {
         const empty = new SpeechSynthesisUtterance('');
@@ -63,34 +56,35 @@ function unlockAudio() {
 }
 
 // ==========================================
-// 1. ANÁLISIS DE FRECUENCIA (GÉNERO)
+// 1. LÓGICA DE GÉNERO (HÍBRIDA)
 // ==========================================
 async function startAudioAnalysis() {
+    // EN MÓVIL: NO ACTIVAMOS EL ANÁLISIS REAL
+    // Esto evita que el micrófono se sature y falle el reconocimiento de texto.
+    if (isMobile) {
+        console.log("📱 Móvil detectado: Usando lógica ligera.");
+        return;
+    }
+
+    // EN PC: SÍ USAMOS ANÁLISIS REAL
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioContext = new AudioContext();
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
 
-        microphoneStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true // Importante para celulares
-            } 
-        });
-
+        microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const source = audioContext.createMediaStreamSource(microphoneStream);
         source.connect(analyser);
-        audioAnalysisInterval = setInterval(analyzePitch, 200);
-
+        audioAnalysisInterval = setInterval(analyzePitchPC, 200);
     } catch (error) {
-        console.error("⚠️ Error audio:", error);
+        console.error("⚠️ Error audio PC:", error);
     }
 }
 
 function stopAudioAnalysis() {
     if (audioAnalysisInterval) clearInterval(audioAnalysisInterval);
+    // Solo cerramos tracks si existen
     if (microphoneStream) {
         microphoneStream.getTracks().forEach(track => track.stop());
         microphoneStream = null;
@@ -100,34 +94,39 @@ function stopAudioAnalysis() {
     }
 }
 
-function analyzePitch() {
+// SOLO PARA PC
+function analyzePitchPC() {
     if (!analyser) return;
-
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     analyser.getByteFrequencyData(dataArray);
 
     let maxVal = 0;
     let maxIndex = 0;
-
     for (let i = 0; i < bufferLength; i++) {
         if (dataArray[i] > maxVal) {
             maxVal = dataArray[i];
             maxIndex = i;
         }
     }
-
     const hz = maxIndex * (audioContext.sampleRate / analyser.fftSize);
-
-    // HE BAJADO EL UMBRAL DE RUIDO A 50 (Antes 100) PARA QUE DETECTE MEJOR
     if (maxVal < 50 || hz < 50 || hz > 800) return;
 
-    if (hz < GENDER_THRESHOLD_HZ) {
-        detectedGender = 'male';
-    } else {
-        detectedGender = 'female';
-    }
+    detectedGender = (hz < GENDER_THRESHOLD_HZ) ? 'male' : 'female';
     updateCharacter(detectedGender);
+}
+
+// LÓGICA PARA MÓVIL (Simulación basada en Texto o Alternancia)
+function determineMobileGender(text) {
+    const lowerText = text.toLowerCase();
+    
+    // 1. Buscar pistas en el texto
+    if (lowerText.includes('hombre') || lowerText.includes('niño') || lowerText.includes('chico')) return 'male';
+    if (lowerText.includes('mujer') || lowerText.includes('niña') || lowerText.includes('chica')) return 'female';
+    
+    // 2. Si no hay pistas, alternar para mostrar que funcionan ambos colores
+    lastGender = (lastGender === 'male') ? 'female' : 'male';
+    return lastGender;
 }
 
 // ==========================================
@@ -142,11 +141,12 @@ function setupSpeechRecognition() {
 
     recognition.onstart = function() {
         isListening = true;
-        const micBtn = document.getElementById('micBtn');
-        micBtn.classList.add('listening');
-        micBtn.innerHTML = '👂 Escuchando...';
+        document.getElementById('micBtn').classList.add('listening');
+        document.getElementById('micBtn').innerHTML = '👂 Escuchando...';
         document.getElementById('character').classList.add('speaking');
-        showStatus('¡HABLA AHORA! Detectando...');
+        showStatus('¡HABLA AHORA!');
+        
+        // Solo iniciamos análisis Hz en PC
         startAudioAnalysis();
     };
 
@@ -154,9 +154,9 @@ function setupSpeechRecognition() {
         isListening = false;
         document.getElementById('micBtn').classList.remove('listening');
         document.getElementById('micBtn').innerHTML = '🎤 Hablar';
+        
         stopAudioAnalysis();
         
-        // Solo quitamos la animación si NO va a hablar inmediatamente
         if (!window.speechSynthesis.speaking) {
             document.getElementById('character').classList.remove('speaking');
         }
@@ -170,23 +170,24 @@ function setupSpeechRecognition() {
     recognition.onerror = function(event) {
         stopAudioAnalysis();
         document.getElementById('character').classList.remove('speaking');
-        showStatus('No te escuché bien. Intenta de nuevo.', true);
+        // En móvil, el error 'no-speech' es muy común, lo ignoramos visualmente
+        if (event.error !== 'no-speech') {
+            showStatus('Error: ' + event.error, true);
+        } else {
+            showStatus('No te escuché. Intenta de nuevo.', true);
+        }
         isListening = false;
         document.getElementById('micBtn').classList.remove('listening');
     };
 }
 
 function toggleListening() {
-    window.speechSynthesis.cancel(); // Callar si estaba hablando
-    
-    // Truco: Despertar audio de nuevo al hacer click
-    unlockAudio();
+    window.speechSynthesis.cancel();
+    unlockAudio(); // Importante en móvil
 
     if (isListening) {
         recognition.stop();
     } else {
-        detectedGender = 'neutral'; 
-        updateCharacter('neutral');
         try {
             recognition.start();
         } catch (e) {
@@ -201,10 +202,15 @@ function processVoiceInput(text) {
     document.getElementById('wordCount').textContent = wordCount;
     document.getElementById('speechText').textContent = `Dijiste: "${text}"`;
     
+    // EN MÓVIL: Usamos la lógica simulada. EN PC: Usamos lo que detectó el analizador
+    if (isMobile) {
+        detectedGender = determineMobileGender(text);
+        updateCharacter(detectedGender);
+    }
+    
     const genderText = detectedGender === 'male' ? 'Masculino' : 'Femenino';
     showStatus(`Género: ${genderText} | Respondiendo...`);
     
-    // LLAMAR A LA FUNCIÓN DE HABLAR CORREGIDA
     speakText(text, detectedGender);
 }
 
@@ -218,61 +224,55 @@ function updateCharacter(gender) {
         character.classList.add('male');
         genderLabel.classList.add('male');
         genderLabel.textContent = 'Masculino';
-    } else if (gender === 'female') {
+    } else {
         character.classList.add('female');
         genderLabel.classList.add('female');
         genderLabel.textContent = 'Femenino';
-    } else {
-        genderLabel.textContent = 'Analizando...';
     }
 }
 
 // ==========================================
-// 3. SINTESIS DE VOZ (PARA ANDROID)
+// 3. SINTESIS DE VOZ (SIMPLIFICADA PARA MÓVIL)
 // ==========================================
 function speakText(text, gender) {
     if (!('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel();
 
-    // USAMOS LA VARIABLE GLOBAL
     currentUtterance = new SpeechSynthesisUtterance(text);
     currentUtterance.lang = 'es-ES';
     currentUtterance.volume = 1.0;
 
-    // En Android, a veces es mejor dejar la voz por defecto y solo cambiar el Pitch
-    // porque buscar voces específicas suele fallar.
+    // CONFIGURACIÓN ROBUSTA (A prueba de fallos)
     if (gender === 'female') {
-        currentUtterance.pitch = 1.3; // Agudo (Mujer)
+        currentUtterance.pitch = 1.4; // Agudo
         currentUtterance.rate = 1.1;
     } else {
-        currentUtterance.pitch = 0.8; // Grave (Hombre)
+        currentUtterance.pitch = 0.7; // Grave
         currentUtterance.rate = 0.9;
     }
 
-    // Animación del personaje
-    const charDiv = document.getElementById('character');
-    
-    currentUtterance.onstart = () => {
-        charDiv.classList.add('speaking');
-    };
-    
-    currentUtterance.onend = () => {
-        charDiv.classList.remove('speaking');
-    };
-    
-    currentUtterance.onerror = (e) => {
-        console.error("Error al hablar:", e);
-        charDiv.classList.remove('speaking');
-    };
-
-    // Forzar la reproducción
-    window.speechSynthesis.speak(currentUtterance);
-    
-    // Si Android pausa el audio, lo forzamos a continuar
-    if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
+    // En PC intentamos buscar voces bonitas. En Móvil NO (para evitar fallos)
+    if (!isMobile) {
+        const voices = window.speechSynthesis.getVoices();
+        let selectedVoice = null;
+        if (gender === 'female') {
+            selectedVoice = voices.find(v => v.name.includes('Helena') || v.name.includes('Sabina') || v.name.includes('Google'));
+        } else {
+            selectedVoice = voices.find(v => v.name.includes('Pablo') || v.name.includes('Raul'));
+        }
+        if (selectedVoice) currentUtterance.voice = selectedVoice;
     }
+
+    // Animación
+    const charDiv = document.getElementById('character');
+    currentUtterance.onstart = () => charDiv.classList.add('speaking');
+    currentUtterance.onend = () => charDiv.classList.remove('speaking');
+    currentUtterance.onerror = () => charDiv.classList.remove('speaking');
+
+    // Hablar
+    window.speechSynthesis.speak(currentUtterance);
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
 }
 
 function resetGame() {
@@ -280,7 +280,6 @@ function resetGame() {
     document.getElementById('speechText').textContent = '¡Hola! Presiona el botón y habla...';
     wordCount = 0;
     document.getElementById('wordCount').textContent = '0';
-    detectedGender = 'neutral';
     updateCharacter('neutral');
     showStatus('Juego reiniciado');
 }
@@ -289,6 +288,10 @@ function showStatus(message, isError = false) {
     const status = document.getElementById('status');
     status.textContent = message;
     status.style.color = isError ? '#ff6b6b' : 'white';
+}
+
+if ('speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 }
 
 
