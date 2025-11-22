@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echo Chamber - Laboratorio de Voces</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Pantalla de Inicio -->
+    <div id="startScreen" class="screen active">
+        <div class="title">🎤 Echo Chamber</div>
+        <div class="title" style="font-size: 2rem; margin-top: -1rem;">Laboratorio de Voces</div>
+        
+        <div class="team">
+            <h3>👥 Desarrollado por:</h3>
+            <p>• Kevin Cuadros Casanova</p>
+        </div>
+
+        <button class="startBtn" onclick="startGame()">🚀 Iniciar Juego</button>
+        
+        <p style="margin-top: 2rem; opacity: 0.8;">Desarrollo de Juegos Interactivos 2</p>
+    </div>
+
+    <!-- Pantalla del Juego -->
+    <div id="gameScreen" class="screen">
+        <div class="lab-background">
+            <div class="lab-floor"></div>
+        </div>
+
+        <div class="game-container">
+            <div class="speech-bubble">
+                <div class="speech-text" id="speechText">
+                    ¡Hola! Presiona el botón del micrófono y dime algo...
+                </div>
+            </div>
+
+            <div class="character-container">
+                <div class="character" id="character">
+                    <div class="character-head">
+                        <div class="character-eye left"></div>
+                        <div class="character-eye right"></div>
+                        <div class="character-mouth"></div>
+                    </div>
+                    <div class="character-body"></div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="control-btn mic-btn" id="micBtn" onclick="toggleListening()">
+                    🎤 Hablar
+                </button>
+                <button class="control-btn reset-btn" onclick="resetGame()">
+                    🔄 Reiniciar
+                </button>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <p>Género detectado:</p>
+            <span class="gender-label male" id="genderLabel">Neutral</span>
+            <p style="margin-top: 0.5rem;">Palabras: <span id="wordCount">0</span></p>
+        </div>
+
+        <div class="status" id="status">Listo para escuchar</div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
+
+
+
+
