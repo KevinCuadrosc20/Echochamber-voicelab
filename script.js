@@ -22,7 +22,7 @@ let micStream;
 let buffer;
 
 // =========================================
-// DETECTOR DE PITCH (Lógica Intacta)
+// DETECTOR DE PITCH 
 // =========================================
 function detectPitch(buf, sampleRate) {
     let SIZE = buf.length;
@@ -59,7 +59,7 @@ function detectPitch(buf, sampleRate) {
 }
 
 // =========================================
-// CLASIFICACIÓN (FORZADA - SIN NEUTRAL)
+// CLASIFICACIÓN 
 // =========================================
 function classifyGender(pitch) {
     if (pitch < FEMALE_MIN) return "Masculino";
@@ -78,7 +78,7 @@ function speak(text, gender) {
     if (gender === "Masculino") u.pitch = 0.8;
     else u.pitch = 1.4;
 
-    // [AGREGADO] Animación de la boca y salto
+    // Animación de la boca y salto
     u.onstart = function() {
         character.classList.add("speaking");
     };
@@ -95,7 +95,7 @@ function speak(text, gender) {
 }
 
 // =========================================
-// LISTENING LOOP (CON CAMBIO DE COLOR AGREGADO)
+// LISTENING LOOP 
 // =========================================
 function audioLoop() {
     requestAnimationFrame(audioLoop);
@@ -111,7 +111,7 @@ function audioLoop() {
 
         genderLabel.textContent = gender;
 
-        // [MODIFICADO] Ahora cambiamos texto Y color del personaje
+        // Cambiamos texto Y color del personaje
         if (gender === "Masculino") {
             // Color Texto
             genderLabel.style.color = "#0077ff"; 
@@ -166,7 +166,7 @@ function startRecognition() {
 
     rec.start();
     statusText.textContent = "Escuchando...";
-    // [AGREGADO] Feedback visual en el botón
+    // Feedback visual en el botón
     micBtn.classList.add("listening");
 
     rec.onresult = (e) => {
@@ -181,7 +181,7 @@ function startRecognition() {
         speak(`Detecté voz ${gender}. Dijiste: ${text}`, gender);
 
         statusText.textContent = "Listo para escuchar";
-        // [AGREGADO] Quitar estado listening del botón
+        // Quitar estado listening del botón
         micBtn.classList.remove("listening");
         listening = false;
         micBtn.textContent = "🎤 Hablar";
@@ -237,6 +237,8 @@ function startGame() {
 function resetGame() {
     location.reload();
 }
+
+
 
 
 
